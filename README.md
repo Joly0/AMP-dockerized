@@ -13,7 +13,7 @@
 This repository bundles [CubeCoders AMP](https://cubecoders.com/AMP) into a Debian-based [Docker image.](https://hub.docker.com/r/mitchtalmadge/amp-dockerized)
 (`mitchtalmadge/amp-dockerized:latest`) so that you can set up game servers with ease! 
 
-In a nutshell, AMP (Application Management Panel) allows you to manage one or more game servers from a web UI. You need a [CubeCoders AMP Licence](https://cubecoders.com/AMP) to use this image.
+In a nutshell, AMP (Application Management Panel) allows you to manage one or more game servers from a web UI. You need a [CubeCoders AMP Licence](https://cubecoders.com/AMP) to use AMP; this image does not bypass that requirement.
 
 > [!WARNING]
 > **This is a community-made unofficial image, and is not endorsed by CubeCoders.**
@@ -35,7 +35,7 @@ If you are using Unraid, you may want to check out the [support topic](https://f
 This image works great on Unraid and I even bought the software just to make sure it worked (and now I use Unraid for all sorts of things!)
 
 > [!WARNING]
-> If you are using an automatic Docker image updater on Unraid, please exclude this image. I would strongly prefer that everyone read my changelogs before updating.
+> If you are using an automatic Docker-image updater on Unraid, please exclude this image. I would strongly prefer that everyone read my changelogs before updating.
 
 I will try to help out where I am able.
  
@@ -48,6 +48,7 @@ I will try to help out where I am able.
 - McMyAdmin 
 - Minecraft Java Edition
 - Minecraft Bedrock Edition
+- Satisfactory
 - StarBound
 - Team Fortress 2
 - Valheim
@@ -62,7 +63,7 @@ If you are *not* able to get a game working, make an issue and we can work toget
 
 # Configuration
 
-I recommend using Unraid or Docker Compose to set up the image. [Sample Docker Compose configurations may be found here](./example-configs).
+I recommend using Unraid or Docker Compose to set up the image. You could also just use `docker run`. [Example scripts and configurations can be found here.](./examples).
 
 ## MAC Address (Required! Please read!)
 > [!CAUTION]
@@ -94,43 +95,40 @@ The instructions to do so are as follows:
         ...
     ```
     
-If you have a unique network situation, a random MAC may not work for you. In that case you will need
-to come up with your own solution to prevent address conflicts.
+If you have a unique network situation, a random MAC may not work for you. In that case you will need to come up with your own solution to prevent address conflicts.
 
-If you need help with any of this, please make an issue.
+Please refer to the [example configurations](./examples) if needed.
+
+For additional help with any of this, please make an issue.
 
 ## Ports
 
-Here's a rough list of default ports for the various game servers. AMP also exposes port 8080 for the Web UI (can be changed with environment variables). If you find an inaccuracy, open an issue!
+When using this image, you need to configure Docker ahead of time to expose the ports that your game servers will use. Any changes to the port mappings will require the container to be restarted.
 
-| Module Name | Default Ports                                                                                                                                                                                  |
-|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `ARK`       | UDP 27015 & UDP 7777 & UDP 7778 ([Guide](https://ark.gamepedia.com/Dedicated_Server_Setup))                                                                                                    |
-| `Arma3`     | UDP 2302 to UDP 2306 ([Guide](https://community.bistudio.com/wiki/Arma_3_Dedicated_Server))                                                                                                    |
-| `Factorio`  | UDP 34197 ([Guide](https://wiki.factorio.com/Multiplayer))                                                                                                                                     |
-| `FiveM`     | UDP 30120 & TCP 30120 ([Guide](https://docs.fivem.net/docs/server-manual/setting-up-a-server/))                                                                                                |
-| `JC2MP`     | UDP 27015 & UDP 7777 & UDP 7778 (Unconfirmed!)                                                                                                                                                 |
-| `McMyAdmin` | TCP 25565                                                                                                                                                                                      |
-| `Minecraft` | TCP 25565 (Java) or UDP 19132 (Bedrock)                                                                                                                                                        |
-| `Rust`      | UDP 28015 ([Guide](https://developer.valvesoftware.com/wiki/Rust_Dedicated_Server))                                                                                                            |
-| `SevenDays` | UDP 26900 to UDP 26902 & TCP 26900 ([Guide](https://developer.valvesoftware.com/wiki/7_Days_to_Die_Dedicated_Server))                                                                          |
-| `StarBound` | TCP 21025 ([Guide](https://starbounder.org/Guide:Setting_Up_Multiplayer))                                                                                                                      |
-| `Valheim`   | UDP 5678 → 5680                                                                                                                                                                                |
+You can find most game server ports on the [Port Forward](https://portforward.com/ports/) website. Alternatively, you could google "[game name] server ports".
+
+For example, with Minecraft, click on the "M" section, then scroll to "Minecraft: Java Edition Server". The ports listed are `TCP: 25565, UDP: 25565`. In this case, you would need to map both TCP and UDP port `25565` from the container to the host:
+
+- For Unraid, you would create two port mappings for `25565`; one using TCP and one using UDP.
+- For Docker Compose, you need to add a `ports` section like so:
+  ```yaml
+  # Your config may look a little different; focus on the ports section
+  services:
+    amp:
+      image: mitchtalmadge/amp-dockerized
+      ports:
+        - "25565:25565/tcp"
+        - "25565:25565/udp"
+      ...
+  ```
+- For `docker run`, use the following flags:
+  `-p 25565:25565/tcp -p 25565:25565/udp`
+
 
 > [!IMPORTANT]
-> Make sure you are using the right protocol. If you accidentally map a TCP port for a UDP game, you won't be able to connect! 
+> Make sure you are using the right protocol. If you accidentally map a TCP port for a UDP game, you won't be able to connect!
 
 ## Environment Variables
-
-### Licence
-
-| Name          | Description                                                                                                              | Default Value                                         |
-|---------------|--------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
-| `AMP_LICENCE` | The licence key for CubeCoders AMP. You can retrieve or buy this on [their website.](https://manage.cubecoders.com/)     | No Default. AMP will not boot without a real licence. |
-
-> [!NOTE]
-> Make sure it's spelled the U.K. English way: "licenCe" not "licenSe"
-> Legacy McMyAdmin licenses will automatically install Minecraft, and cannot install other games. (If you don't know what McMyAdmin is, this doesn't apply to you). 
 
 ### User/Group
 
@@ -160,9 +158,9 @@ Example: `TZ=America/Denver`
 ### Auto-Update
 | Name              | Description                                                                                     | Default Value |
 |-------------------|-------------------------------------------------------------------------------------------------|---------------|
-| `AMP_AUTO_UPDATE` | Whether to update AMP automatically when you reboot the container. | `true`       |
+| `AMP_AUTO_UPDATE` | Set to `false` if you would like to disable automatic updates on container reboot. You will still be able to update AMP manually through the web UI. | `true`        |
 
-By default, you can update AMP using the web UI, or by restarting the container (if `AMP_AUTO_UPDATE` is left untouched or set to `true`). AMP will alert you when an update is available through its UI. The updates to this container image are not directly tied to AMP updates. Think of this container more like an all-in-one "operating system" for AMP. New versions of this container are only necessary when AMP is not working correctly.
+By default, AMP will automatically update when this container reboots. You can update AMP using the web UI as well - AMP will alert you when an update is available through its UI. The updates to this container image are not directly tied to AMP updates. Think of this container more like an all-in-one "operating system" for AMP. New versions of this container are only necessary when AMP is not working correctly. If you would like to disable automatic updates on container reboot, you can set `AMP_AUTO_UPDATE` to `false`.
 
 ## Volumes
 
@@ -171,7 +169,7 @@ By default, you can update AMP using the web UI, or by restarting the container 
 
 | Mount Point  | Description                                                                                                                                                                                                                  |
 |--------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/home/amp/.ampdata` | **Required!** This volume contains everything AMP needs to run. This includes all your instances, all their game & save files, the web UI sign-in info, etc. Without creating this volume, AMP would be wiped on every boot. |
+| `/home/amp/` | **Required!** This volume contains everything AMP needs to run. This includes all your instances, all their game & save files, the web UI sign-in info, etc. Without creating this volume, AMP would be wiped on every boot. |
 
 # Advanced Configuration
 Please see the [advanced configuration wiki page](https://github.com/MitchTalmadge/AMP-dockerized/wiki/Advanced-Configuration) for more that you can do with this container.

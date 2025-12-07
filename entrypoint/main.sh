@@ -16,11 +16,23 @@ echo ""
 source /opt/entrypoint/utils.sh
 source /opt/entrypoint/routines.sh
 trap 'handle_error' ERR
-trap_with_arg 'shutdown' INT TERM HUP QUIT KILL 
+trap_with_arg 'shutdown' INT TERM HUP QUIT KILL
 
-# Migrate legacy vars
-export AMP_LICENCE=${LICENCE:-${AMP_LICENCE:-"notset"}}
-export AMP_MODULE=${MODULE:-${AMP_MODULE:-"ADS"}}
+# Set JAVA_HOME based on architecture
+detect_architecture() {
+    if [ "$(uname -m)" = "aarch64" ]; then
+        export JAVA_HOME="/usr/lib/jvm/temurin-25-jdk-arm64"
+    else
+        export JAVA_HOME="/usr/lib/jvm/temurin-25-jdk-amd64"
+    fi
+    echo "Setting JAVA_HOME to: $JAVA_HOME"
+}
+
+detect_architecture 
+
+check_data_volume
+
+# Legacy naming
 if [ ! -z "${NIGHTLY}" ]; then
   export AMP_RELEASE_STREAM="Development"
 fi
@@ -28,8 +40,6 @@ fi
 run_startup_script
 
 create_amp_user
-
-check_licence
 
 configure_timezone
 
@@ -39,7 +49,7 @@ configure_main_instance
 
 configure_release_stream
 
-if [ ${AMP_AUTO_UPDATE} = "true" ]; then
+if [ "${AMP_AUTO_UPDATE}" = "true" ]; then
   upgrade_instances
 else
   echo "Skipping automatic updates."

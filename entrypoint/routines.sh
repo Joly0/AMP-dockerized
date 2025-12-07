@@ -1,30 +1,68 @@
 #!/bin/bash
 
+check_data_volume() {
+  # Starting with V24, we recommend that users mount /home/amp instead of /home/amp/.ampdata. 
+  # This function allows existing users to simply change their mount point in the container, 
+  # without needing to do any complicated remapping of their host data.
+  echo "Checking data volume..."
+
+  local AMP_HOME="/home/amp"
+  local AMP_DATA_DIR="${AMP_HOME}/.ampdata"
+  local AMP_DOCKERIZED_DIR="${AMP_DATA_DIR}/.amp-dockerized"
+  local LEGACY_INSTANCES_JSON="${AMP_HOME}/instances.json"
+  local LEGACY_INSTANCES_DIR="${AMP_HOME}/instances"
+
+  if [ -f "${LEGACY_INSTANCES_JSON}" ] || [ -d "${LEGACY_INSTANCES_DIR}" ]; then
+    echo "Updated data volume detected. Migration is required."
+    # At this point we have detected that the contents of .ampdata are mapped to /home/amp, which is expected for V24 volume migration.
+    # For example, the volume mount may have changed from:
+    #     /mnt/user/appdata/amp:/home/amp/.ampdata 
+    # to...
+    #     /mnt/user/appdata/amp:/home/amp
+    if [ -d "${AMP_DATA_DIR}" ]; then # This can happen if the new volume (/home/amp) was accidentally mounted on image v23 or earlier.
+      if [ ! -z "$(ls -A "${AMP_DATA_DIR}")" ]; then # Something is very odd if .ampdata is not empty.
+        echo "Error: Need to migrate data (${LEGACY_INSTANCES_DIR} and ${LEGACY_INSTANCES_JSON}), but ${AMP_DATA_DIR} is not empty. Please resolve this conflict manually. For help, visit https://github.com/MitchTalmadge/AMP-dockerized/discussions/247"
+        exit 1
+      fi
+      echo "Empty .ampdata directory detected. Removing..."
+      rmdir "${AMP_DATA_DIR}"
+    fi
+    
+    echo "Beginning data migration..."
+    mkdir -p "${AMP_DATA_DIR}"
+
+    find "${AMP_HOME}" -mindepth 1 -maxdepth 1 \
+      ! -name '.ampdata' \
+      ! -name 'scripts' \
+      -exec mv {} "${AMP_DATA_DIR}" \;
+
+    # For future use, we will leave a fingerprint indicating that a migration took place
+    mkdir -p "${AMP_DOCKERIZED_DIR}"
+    touch "${AMP_DOCKERIZED_DIR}/.v24_volume_migrated"
+
+    echo "Migration complete."
+  fi
+
+  echo "Data volume is ok!"
+}
+
 check_file_permissions() {
   echo "Checking file permissions..."
   chown -R ${APP_USER}:${APP_GROUP} /home/amp
 }
 
-check_licence() {
-  echo "Checking licence..."
-  if [ ${AMP_LICENCE} = "notset" ]; then
-    handle_error "AMP_LICENCE is not set. You need to have a valid AMP licence from cubecoders.com specified in the AMP_LICENCE environment variable"
-  fi
-  # TODO: Find a way to test the licence validity
-}
-
 configure_main_instance() {
-  echo "Checking Main instance existence..."
+  echo "Checking ADS instance existence..."
   if ! does_main_instance_exist; then
-    echo "Creating Main instance... (This can take a while)"
-    run_amp_command "CreateInstance \"${AMP_MODULE}\" Main \"${IPBINDING}\" \"${PORT}\" \"${AMP_LICENCE}\" \"${USERNAME}\" \"${PASSWORD}\"" | consume_progress_bars
+    echo "Creating ADS instance... (This can take a while)"
+    run_amp_command "QuickStart \"${USERNAME}\" \"${PASSWORD}\" \"${IPBINDING}\" \"${PORT}\"" | consume_progress_bars
     if ! does_main_instance_exist; then
-      handle_error "Failed to create Main instance. Please check your configuration."
+      handle_error "Failed to create ADS instance. Please check your configuration."
     fi
   fi
 
-  echo "Setting Main instance to start on boot..."
-  run_amp_command "ShowInstanceInfo Main" | grep "Start on Boot" | grep -q "No" && run_amp_command "SetStartBoot Main yes" || true 
+  echo "Setting ADS instance to start on boot..."
+  run_amp_command "ShowInstanceInfo ADS01" | grep "Start on Boot" | grep -q "No" && run_amp_command "SetStartBoot ADS01 yes" || true
 }
 
 configure_release_stream() {
@@ -104,7 +142,7 @@ monitor_amp() {
   # Periodically process pending tasks (e.g. upgrade, reboots, ...)
   while true; do
     run_amp_command_silently "ProcessPendingTasks"
-    sleep 5 # The UI's restart timeout is 10 seconds, so let's be safe.
+    sleep 60 # Check for pending tasks every 60 seconds to reduce CPU usage
   done
 }
 
