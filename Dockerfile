@@ -203,13 +203,17 @@ RUN apt-get update && \
     apt-transport-https \
     gnupg
 
-# Add CubeCoders repository and key
-RUN wget -qO - http://repo.cubecoders.com/archive.key | gpg --dearmor > /etc/apt/trusted.gpg.d/cubecoders-archive-keyring.gpg && \
+# Add CubeCoders repository and key.
+# Uses the deb822 .sources format and keyring location from the official
+# getamp.sh installer (addRepo), as required on Debian 12+.
+RUN install -d -m 0755 /usr/share/keyrings && \
+    wget -qO /usr/share/keyrings/cdn-repo.c7rs.com.gpg https://cdn-repo.c7rs.com/archive.key && \
     if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-        echo "deb http://repo.cubecoders.com/aarch64 debian/" > /etc/apt/sources.list.d/cubecoders.list; \
+        REPO_SUFFIX="aarch64/"; \
     else \
-        echo "deb http://repo.cubecoders.com/ debian/" > /etc/apt/sources.list.d/cubecoders.list; \
+        REPO_SUFFIX=""; \
     fi && \
+    printf "Types: deb\nURIs: https://cdn-repo.c7rs.com/%s\nSuites: debian/\nArchitectures: %s\nSigned-By: /usr/share/keyrings/cdn-repo.c7rs.com.gpg\n" "${REPO_SUFFIX}" "$(dpkg --print-architecture)" > /etc/apt/sources.list.d/cdn-repo.c7rs.com.sources && \
     apt-get update && \
     # Just download (don't actually install) ampinstmgr
     apt-get install -y --no-install-recommends --download-only ampinstmgr && \
